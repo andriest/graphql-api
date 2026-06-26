@@ -1,5 +1,4 @@
 use crate::{context::Context, models::Account};
-use chrono::{NaiveDate, NaiveDateTime};
 use juniper::{graphql_object, GraphQLInputObject};
 
 pub struct AccountHandler(Account);

@@ -1,18 +1,13 @@
-use std::{env, ops::DerefMut, sync::Arc};
+use std::{env, sync::Arc};
 
 use crate::schema_graphql::SchemaGraphQL;
-use crate::{context::Context, db::DbPool, models::Account};
+use crate::{context::Context, db::DbPool};
 use actix_web::{
-    http::{header::HeaderMap, Method},
+    http::Method,
     web, HttpRequest, HttpResponse,
 };
-use chrono::Utc;
-use diesel::prelude::*;
 use graphql_parser::query;
-use juniper::{
-    http::{playground::playground_source, GraphQLRequest},
-    serde::ser::Error as SerdeError,
-};
+use juniper::http::{playground::playground_source, GraphQLRequest};
 use juniper::{DefaultScalarValue, InputValue, ScalarValue};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -97,33 +92,22 @@ pub async fn graphql(
 
     let data: GraphQLRequest = api_data.clone().into();
 
-    match env::var("DISABLE_INTROSPECTION") {
-        Ok(rv) => {
-            if rv.to_lowercase() == "true" {
-                let operations = graphql_parser::parse_query::<&str>(api_data.query.as_str())
-                    .map(|ast| extract_graphql_operation(ast, api_data.operation_name.clone()))
-                    .unwrap_or(vec![]);
+    if let Ok(rv) = env::var("DISABLE_INTROSPECTION") {
+        if rv.to_lowercase() == "true" {
+            let operations = graphql_parser::parse_query::<&str>(api_data.query.as_str())
+                .map(|ast| extract_graphql_operation(ast, api_data.operation_name.clone()))
+                .unwrap_or(vec![]);
 
-                if operations.contains(&"__schema") {
-                    return Ok(HttpResponse::Ok().json(json!({
-                        "errors": [
-                            {
-                                "message": "Unknown field \"__schema\" on type \"QueryRoot\""
-                            }
-                        ]
-                    })));
-                } else if operations.contains(&"__type") {
-                    return Ok(HttpResponse::Ok().json(json!({
-                        "errors": [
-                            {
-                                "message": "Unknown field \"__type\" on type \"QueryRoot\""
-                            }
-                        ]
-                    })));
-                }
+            if operations.contains(&"__schema") {
+                return Ok(HttpResponse::Ok().json(json!({
+                    "errors": [{"message": "Unknown field \"__schema\" on type \"QueryRoot\""}]
+                })));
+            } else if operations.contains(&"__type") {
+                return Ok(HttpResponse::Ok().json(json!({
+                    "errors": [{"message": "Unknown field \"__type\" on type \"QueryRoot\""}]
+                })));
             }
         }
-        _ => {}
     }
 
     let db_pool = (*db_pool).clone();

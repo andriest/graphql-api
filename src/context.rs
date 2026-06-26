@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{db::DbPool, models::accounts};
+use crate::db::DbPool;
 
 #[derive(Clone)]
 pub struct Context {

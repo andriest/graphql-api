@@ -2,13 +2,17 @@ use crate::{
     handlers::accounts::{CreateAccount, UpdateAccount},
     schema::accounts,
 };
-use diesel::{
-    dsl::{count, exists, sql},
-    prelude::*,
-    sql_types,
-};
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 
-use chrono::{NaiveDate, NaiveDateTime};
+#[derive(AsChangeset)]
+#[diesel(table_name = accounts)]
+pub struct AccountChangeset {
+    pub nickname: Option<String>,
+    pub full_name: Option<String>,
+    pub email: Option<String>,
+    pub phone_num: Option<String>,
+}
 
 #[derive(Insertable)]
 #[diesel(table_name = accounts)]
@@ -66,29 +70,15 @@ pub fn create(conn: &mut PgConnection, data: CreateAccount) -> QueryResult<usize
 
 pub fn update(conn: &mut PgConnection, id: i32, data: UpdateAccount) -> QueryResult<usize> {
     use crate::schema::accounts::dsl;
-
-    conn.build_transaction().read_write().run(|conn| {
-        let up = || diesel::update(dsl::accounts.filter(dsl::id.eq(id)));
-        let mut count = 0;
-
-        if let Some(ref nickname) = data.fullname {
-            count = up().set(dsl::nickname.eq(nickname)).execute(conn)?;
-        }
-
-        if let Some(ref fullname) = data.fullname {
-            count = up().set(dsl::full_name.eq(fullname)).execute(conn)?;
-        }
-
-        if let Some(ref email) = data.email {
-            count = up().set(dsl::email.eq(email)).execute(conn)?;
-        }
-
-        if let Some(ref phone_num) = data.phone_num {
-            count = up().set(dsl::phone_num.eq(phone_num)).execute(conn)?;
-        }
-
-        Ok(count)
-    })
+    let changeset = AccountChangeset {
+        nickname: data.nickname,
+        full_name: data.fullname,
+        email: data.email,
+        phone_num: data.phone_num,
+    };
+    diesel::update(dsl::accounts.filter(dsl::id.eq(id)))
+        .set(changeset)
+        .execute(conn)
 }
 
 pub fn delete_by_id(conn: &mut PgConnection, id: i32) -> QueryResult<usize> {
