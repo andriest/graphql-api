@@ -1,79 +1,154 @@
 # graphql-api
 
-graphql-api is a GraphQL API built with Rust using the juniper library. This project is designed to provide a robust and efficient GraphQL server with support for database integration via diesel.
+A GraphQL API built with Rust using Juniper, Diesel, and Actix-web. Supports full CRUD operations on accounts with optional introspection control.
 
-## Features
+## Tech Stack
 
-- GraphQL API: Built using juniper for defining queries, mutations, and schema.
-- Database Integration: Uses diesel as the ORM for database queries.
-- Async Server: Powered by actix-web for efficient request handling.
+| Library | Role |
+|---------|------|
+| [Juniper](https://github.com/graphql-rust/juniper) | GraphQL schema & resolvers |
+| [Diesel](https://diesel.rs) | ORM & migrations (PostgreSQL) |
+| [Actix-web](https://actix.rs) | Async HTTP server |
+| [r2d2](https://github.com/sfackler/r2d2) | Connection pooling |
 
 ## Prerequisites
 
-To run this project, you’ll need the following installed:
+- Rust (stable)
+- PostgreSQL
+- Diesel CLI: `cargo install diesel_cli --no-default-features --features postgres`
 
-- Rust (latest stable version)
-- Diesel CLI (for managing database migrations)
-- A database (e.g., PostgreSQL, SQLite, or MySQL)
+## Setup
 
-## Installation
-
-1. Setup the environment variables:
-
-   `cp .env.example .env`
-
-   env
-   `DATABASE_URL=postgres://username:password@localhost/graphql_db`
-
-2. Run database migrations:
-
-   ```
-   diesel setup
-   diesel migration run
-   ```
-
-3. Build and run the server:
-
-   `cargo run`
-
-## Usage
-
-Starting the Server
-
-The server runs by default on http://127.0.0.1:8080/playground.
-
-### Example Queries
-
-#### Query Example
-
+**1. Copy environment file**
+```bash
+cp .env.example .env
 ```
+
+Edit `.env` sesuai konfigurasi lokal:
+```env
+HOST=127.0.0.1
+PORT=8080
+DATABASE_URL=postgres://username:password@localhost/graphql
+```
+
+**2. Setup database & jalankan migrations**
+```bash
+make db-setup
+make db-migrate
+```
+
+**3. Jalankan server**
+```bash
+make run
+```
+
+Server berjalan di `http://127.0.0.1:8080`.
+GraphQL Playground tersedia di `http://127.0.0.1:8080/playground`.
+
+## Makefile Commands
+
+```bash
+make build          # Build debug binary
+make build-release  # Build optimized release binary
+make run            # Run in debug mode
+make run-release    # Run in release mode
+make test           # Run unit tests
+make test-verbose   # Run tests with stdout output
+make lint           # Clippy dengan strict warnings
+make fmt            # Auto-format source code
+make db-setup       # Inisialisasi database
+make db-migrate     # Jalankan pending migrations
+make db-rollback    # Revert migrasi terakhir
+make db-reset       # Drop & ulang semua migrasi
+make clean          # Hapus build artifacts
+make help           # Tampilkan semua commands
+```
+
+## GraphQL API
+
+### Queries
+
+**Get account by ID**
+```graphql
 query {
   getById(id: 1) {
     id
     nickname
+    fullname
+    email
+    phoneNum
+    joinedAt
   }
 }
 ```
 
-#### Mutation Example
-
-```
-mutation {
-  updateAccount(id: 1, data: { nickname: "Updated Name" })
+**List accounts** (dengan pagination)
+```graphql
+query {
+  accounts(skip: 0, limit: 10) {
+    id
+    nickname
+    email
+  }
 }
 ```
 
-You can test these queries using tools like [Postman](https://www.postman.com/) or [GraphQL Playground](https://www.apollographql.com/docs/apollo-server/testing/graphql-playground/).
+### Mutations
 
-## Technologies Used
+**Create account**
+```graphql
+mutation {
+  createAccount(data: {
+    nickname: "zmab"
+    fullname: "Andrie Bam"
+    email: "andrie@example.com"
+    phoneNum: "081234567890"
+  })
+}
+```
 
-- Rust: High-performance systems programming language.
-- Juniper: GraphQL library for Rust.
-- Diesel: ORM for database queries and migrations.
-- Actix-Web: Web framework for building the HTTP server.
+**Update account** (semua field opsional)
+```graphql
+mutation {
+  updateAccount(id: 1, data: {
+    fullname: "New Name"
+    email: "new@example.com"
+  })
+}
+```
 
-## Acknowledgments
+**Delete account**
+```graphql
+mutation {
+  deleteAccount(id: 1)
+}
+```
 
-- Juniper for enabling GraphQL in Rust.
-- Diesel for powerful database management.
-- Actix-Web for its high-performance server framework.
+## Environment Variables
+
+| Variable | Keterangan | Contoh |
+|----------|-----------|--------|
+| `HOST` | Bind address server | `127.0.0.1` |
+| `PORT` | Port server | `8080` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://user:pass@localhost/graphql` |
+| `DISABLE_INTROSPECTION` | Nonaktifkan introspection query (`true`/`false`) | `false` |
+
+## Project Structure
+
+```
+src/
+├── main.rs               # Entry point, server setup
+├── lib.rs                # Modul declarations
+├── context.rs            # Juniper context (db pool)
+├── db.rs                 # Connection pool setup
+├── schema.rs             # Diesel schema (auto-generated)
+├── schema_graphql.rs     # GraphQL QueryRoot & MutationRoot
+├── macros.rs             # Helper macro to_graph_models!
+├── handlers/
+│   ├── accounts.rs       # AccountHandler GraphQL object & input types
+│   └── graphql.rs        # HTTP handler & introspection guard
+└── models/
+    └── accounts.rs       # Account model & DB query functions
+migrations/
+└── ...                   # Diesel migration files
+```
