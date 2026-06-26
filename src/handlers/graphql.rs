@@ -2,10 +2,7 @@ use std::{env, sync::Arc};
 
 use crate::schema_graphql::SchemaGraphQL;
 use crate::{context::Context, db::DbPool};
-use actix_web::{
-    http::Method,
-    web, HttpRequest, HttpResponse,
-};
+use actix_web::{http::Method, web, HttpRequest, HttpResponse};
 use graphql_parser::query;
 use juniper::http::{playground::playground_source, GraphQLRequest};
 use juniper::{DefaultScalarValue, InputValue, ScalarValue};
@@ -25,9 +22,9 @@ where
     variables: Option<InputValue<S>>,
 }
 
-impl Into<GraphQLRequest> for ApiGraphQLRequest {
-    fn into(self) -> GraphQLRequest {
-        GraphQLRequest::new(self.query.clone(), self.operation_name, self.variables)
+impl From<ApiGraphQLRequest> for GraphQLRequest {
+    fn from(val: ApiGraphQLRequest) -> Self {
+        GraphQLRequest::new(val.query.clone(), val.operation_name, val.variables)
     }
 }
 
@@ -35,7 +32,7 @@ impl Into<GraphQLRequest> for ApiGraphQLRequest {
 fn extract_graphql_operation<'a>(
     ast: query::Document<'a, &'a str>,
     operation_name: Option<String>,
-) -> Vec<&str> {
+) -> Vec<&'a str> {
     ast.definitions
         .into_iter()
         .filter_map(|d| match d {
@@ -44,7 +41,7 @@ fn extract_graphql_operation<'a>(
         })
         .filter_map(|o| match o {
             query::OperationDefinition::Query(q) => {
-                if operation_name.is_none() || q.name.as_deref() == operation_name.as_deref() {
+                if operation_name.is_none() || q.name == operation_name.as_deref() {
                     Some(q.selection_set.items)
                 } else {
                     None
@@ -96,7 +93,7 @@ pub async fn graphql(
         if rv.to_lowercase() == "true" {
             let operations = graphql_parser::parse_query::<&str>(api_data.query.as_str())
                 .map(|ast| extract_graphql_operation(ast, api_data.operation_name.clone()))
-                .unwrap_or(vec![]);
+                .unwrap_or_default();
 
             if operations.contains(&"__schema") {
                 return Ok(HttpResponse::Ok().json(json!({
@@ -115,4 +112,67 @@ pub async fn graphql(
     let res = data.execute(&st, &ctx).await;
 
     Ok(HttpResponse::Ok().json(res))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use graphql_parser::parse_query;
+
+    #[test]
+    fn extract_graphql_operation_should_return_field_names_for_shorthand_query() {
+        let doc = parse_query::<&str>("{ accounts { id } }").unwrap();
+        let fields = extract_graphql_operation(doc, None);
+        assert_eq!(fields, vec!["accounts"]);
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_return_multiple_top_level_fields() {
+        let doc = parse_query::<&str>("{ accounts { id } getById(id: 1) { id } }").unwrap();
+        let fields = extract_graphql_operation(doc, None);
+        assert_eq!(fields, vec!["accounts", "getById"]);
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_detect_schema_introspection_field() {
+        let doc = parse_query::<&str>("{ __schema { types { name } } }").unwrap();
+        let fields = extract_graphql_operation(doc, None);
+        assert_eq!(fields, vec!["__schema"]);
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_detect_type_introspection_field() {
+        let doc = parse_query::<&str>("{ __type(name: \"Account\") { fields { name } } }").unwrap();
+        let fields = extract_graphql_operation(doc, None);
+        assert_eq!(fields, vec!["__type"]);
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_filter_by_operation_name() {
+        let query = r#"
+            query GetAccounts { accounts { id } }
+            query GetById { getById(id: 1) { id } }
+        "#;
+        let doc = parse_query::<&str>(query).unwrap();
+        let fields = extract_graphql_operation(doc, Some("GetAccounts".to_string()));
+        assert_eq!(fields, vec!["accounts"]);
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_return_empty_for_non_matching_operation_name() {
+        let doc = parse_query::<&str>("query GetAccounts { accounts { id } }").unwrap();
+        let fields = extract_graphql_operation(doc, Some("NonExistent".to_string()));
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn extract_graphql_operation_should_return_all_operations_when_no_name_filter() {
+        let query = r#"
+            query GetAccounts { accounts { id } }
+            query GetById { getById(id: 1) { id } }
+        "#;
+        let doc = parse_query::<&str>(query).unwrap();
+        let fields = extract_graphql_operation(doc, None);
+        assert_eq!(fields, vec!["accounts", "getById"]);
+    }
 }

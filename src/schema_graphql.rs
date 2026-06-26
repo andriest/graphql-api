@@ -35,14 +35,14 @@ impl MutationRoot {
     #[graphql(description = "Create account")]
     fn create_account(ctx: &Context, data: CreateAccount) -> FieldResult<i32> {
         let mut conn = ctx.db_pool.get()?;
-        let created = models::accounts::create(&mut conn, data.into())?;
+        let created = models::accounts::create(&mut conn, data)?;
         Ok(created as i32)
     }
 
     #[graphql(description = "Update account")]
     fn update_account(ctx: &Context, id: i32, data: UpdateAccount) -> FieldResult<i32> {
         let mut conn = ctx.db_pool.get()?;
-        let updated = models::accounts::update(&mut conn, id, data.into())?;
+        let updated = models::accounts::update(&mut conn, id, data)?;
         Ok(updated as i32)
     }
 

@@ -1,7 +1,7 @@
 #![allow(unused_macros)]
 
-extern crate dotenv;
 extern crate diesel;
+extern crate dotenv;
 #[macro_use]
 extern crate serde;
 
